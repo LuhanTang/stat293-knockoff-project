@@ -1,0 +1,325 @@
+---
+title: '293'
+author: "Luhan Tang and Shengming Chen"
+date: "2025-11-13"
+output: html_document
+---
+
+```{r}
+#############################################
+#   STAT 293 – Model-X Knockoffs Project
+#   Final Version: Knockoff+ vs BH only
+#############################################
+
+### 1. Load packages -------------------------------------------------
+packs <- c("MASS","glmnet","knockoff","ggplot2","dplyr","corpcor")
+new <- setdiff(packs, rownames(installed.packages()))
+if(length(new)) install.packages(new)
+invisible(lapply(packs, library, character.only=TRUE))
+```
+
+```{r}
+set.seed(100)
+
+############################################################
+### 2. Helper: AR(1) covariance
+############################################################
+ar1_cov <- function(p, rho){
+  idx <- 1:p
+  rho^abs(outer(idx, idx, "-"))
+}
+
+############################################################
+### 3. Data generators for the three models
+############################################################
+
+## 3.1 Gaussian linear model
+gen_gaussian_linear <- function(n = 250,
+                                p = 400,
+                                s = 40,
+                                snr = 8,
+                                rho = 0.3,
+                                seed = NULL){
+  if(!is.null(seed)) set.seed(seed)
+  
+  Sigma <- ar1_cov(p, rho)
+  X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  
+  beta <- rep(0, p)
+  supp <- sample(1:p, s)
+  beta[supp] <- 1.5
+  
+  signal <- as.vector(X %*% beta)
+  sigma_eps <- sqrt(var(signal) / snr)
+  y <- signal + rnorm(n, 0, sigma_eps)
+  
+  list(X = X, y = y, beta = beta, supp = supp)
+}
+
+## 3.2 Logistic regression with AR(1)
+gen_logistic_ar1 <- function(n = 250,
+                             p = 400,
+                             s = 40,
+                             rho = 0.3,
+                             beta_size = 1.5,
+                             seed = NULL){
+  if(!is.null(seed)) set.seed(seed)
+  
+  Sigma <- ar1_cov(p, rho)
+  X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  
+  beta <- rep(0,p)
+  supp <- sample(1:p, s)
+  beta[supp] <- beta_size
+  
+  eta <- as.vector(X %*% beta)
+  prob <- 1/(1 + exp(-eta))
+  y <- rbinom(n, size = 1, prob = prob)
+  
+  list(X = X, y = y, beta = beta, supp = supp)
+}
+
+## 3.3 Logistic regression, large n/p
+gen_logistic_large <- function(n = 250,
+                               p = 400,
+                               s = 60,
+                               beta_size = 1.5,
+                               seed = NULL){
+  if(!is.null(seed)) set.seed(seed)
+  
+  X <- matrix(rnorm(n*p), n, p)
+  
+  beta <- rep(0,p)
+  supp <- sample(1:p, s)
+  beta[supp] <- beta_size
+  
+  eta <- as.vector(X %*% beta)
+  prob <- 1/(1 + exp(-eta))
+  y <- rbinom(n, size = 1, prob = prob)
+  
+  list(X = X, y = y, beta = beta, supp = supp)
+}
+
+############################################################
+### 4. Lasso-based statistic for Knockoffs
+###    
+############################################################
+lasso_stat_generic <- function(X, Xk, y, family = c("gaussian","binomial")){
+  family <- match.arg(family)
+  
+  Xaug <- cbind(X, Xk)
+  fit  <- glmnet(Xaug, y, family = family)
+  
+  # For each lambda, calculate the sum of (y - yhat)^2 and select the column with the smallest sum.
+  yhat <- predict(fit, Xaug, type = "response")  # n x length(lambda)
+  rss  <- colSums((y - yhat)^2)
+  idx_min <- which.min(rss)
+  
+# Take the corresponding column directly from the original beta matrix of fit (excluding the intercept).
+  coefs <- as.numeric(fit$beta[, idx_min])
+  
+  p <- ncol(X)
+  Z  <- abs(coefs[1:p])
+  Zk <- abs(coefs[(p+1):(2*p)])
+  
+  W <- pmax(Z, Zk) * sign(Z - Zk)
+  W
+}
+
+############################################################
+### 5. Knockoff+ selection
+############################################################
+run_knockoff <- function(X, y, q=0.10, family=c("gaussian","binomial")){
+  family <- match.arg(family)
+  
+  Sigma1 <- cov.shrink(X)    # always PD
+  Sigma  <- as.matrix(Sigma1)
+  class(Sigma) <- NULL
+  
+  kobj <- knockoff::create.gaussian(X, mu = rep(0, ncol(X)), Sigma = Sigma)
+  Xk <- if(is.list(kobj) && !is.null(kobj$Xk)) kobj$Xk else kobj
+  
+  W <- lasso_stat_generic(X, Xk, y, family = family)
+  T <- knockoff.threshold(W, fdr = q, offset = 1)
+  
+  which(W >= T)
+}
+
+############################################################
+### 6. BH baseline
+############################################################
+run_bh <- function(X, y, q=0.10, family=c("gaussian","binomial")){
+  family <- match.arg(family)
+  
+  pvals <- apply(X, 2, function(x){
+    if(family=="gaussian"){
+      summary(lm(y ~ x))$coef[2,4]
+    } else {
+      summary(glm(y ~ x, family = binomial))$coef[2,4]
+    }
+  })
+  
+  which(p.adjust(pvals, method = "BH") <= q)
+}
+
+############################################################
+### 7. Single simulation for a chosen model
+############################################################
+one_run_model <- function(model=c("gaussian","logistic_ar1","logistic_large"),
+                          q=0.10, seed=1){
+  model <- match.arg(model)
+  
+  if(model=="gaussian"){
+    dat <- gen_gaussian_linear(seed = seed)
+    family <- "gaussian"
+  } else if(model=="logistic_ar1"){
+    dat <- gen_logistic_ar1(seed = seed)
+    family <- "binomial"
+  } else {
+    dat <- gen_logistic_large(seed = seed)
+    family <- "binomial"
+  }
+  
+  X <- scale(dat$X)
+  y <- dat$y
+  supp <- dat$supp
+  
+  ## Knockoff+
+  sel_k <- run_knockoff(X, y, q = q, family = family)
+  tp_k  <- sum(sel_k %in% supp)
+  fp_k  <- length(sel_k) - tp_k
+  fdr_k <- ifelse(length(sel_k)==0, 0, fp_k/length(sel_k))
+  tpr_k <- tp_k / length(supp)
+  
+  ## BH
+  sel_bh <- run_bh(X, y, q = q, family = family)
+  tp_bh  <- sum(sel_bh %in% supp)
+  fp_bh  <- length(sel_bh) - tp_bh
+  fdr_bh <- ifelse(length(sel_bh)==0, 0, fp_bh/length(sel_bh))
+  tpr_bh <- tp_bh / length(supp)
+  
+  data.frame(
+    model    = model,
+    method   = c("Knockoff+","BH"),
+    q        = q,
+    FDR      = c(fdr_k, fdr_bh),
+    TPR      = c(tpr_k, tpr_bh),
+    selected = c(length(sel_k), length(sel_bh))
+  )
+}
+
+############################################################
+### 8. Repeat for all models
+############################################################
+run_reps_all <- function(R=10, qs=c(0.05,0.10,0.20)){
+  models <- c("gaussian","logistic_ar1","logistic_large")
+  
+  all_res <- lapply(1:R, function(r){
+    do.call(rbind, lapply(models, function(m){
+      do.call(rbind, lapply(qs, function(q){
+        one_run_model(model = m, q = q, seed = 1000*r + 100*q)
+      }))
+    }))
+  })
+  
+  do.call(rbind, all_res)
+}
+
+############################################################
+### 9. Run experiment
+############################################################
+res_all <- run_reps_all(R = 10)
+
+############################################################
+### 10. Summaries
+############################################################
+summ_all <- res_all %>%
+  group_by(model, method, q) %>%
+  summarise(
+    mean_FDR = mean(FDR),
+    mean_TPR = mean(TPR),
+    mean_sel = mean(selected),
+    .groups  = "drop"
+  )
+
+print(summ_all)
+
+############################################################
+### 11. Per-model plots for FDR and Power (TPR)
+###     
+############################################################
+
+# output files
+out_dir <- "plots"
+if(!dir.exists(out_dir)) dir.create(out_dir)
+
+models <- unique(summ_all$model)
+
+for(m in models){
+  df_m <- dplyr::filter(summ_all, model == m)
+  
+  # FDR plot for this model
+  p_fdr_m <- ggplot(df_m, aes(x = factor(q),
+                              y = mean_FDR,
+                              group = method,
+                              color = method)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2) +
+    labs(
+      title = paste0("FDR vs Target q (", m, " model)"),
+      x     = "Target FDR level q",
+      y     = "Empirical FDR"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+  
+  ggsave(
+    filename = file.path(out_dir, paste0(m, "_FDR.png")),
+    plot     = p_fdr_m,
+    width    = 6,
+    height   = 4,
+    dpi      = 300
+  )
+  
+  # Power (TPR) plot for this model
+  p_tpr_m <- ggplot(df_m, aes(x = factor(q),
+                              y = mean_TPR,
+                              group = method,
+                              color = method)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2) +
+    labs(
+      title = paste0("Power vs Target q (", m, " model)"),
+      x     = "Target FDR level q",
+      y     = "Power (TPR)"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+  
+  ggsave(
+    filename = file.path(out_dir, paste0(m, "_power.png")),
+    plot     = p_tpr_m,
+    width    = 6,
+    height   = 4,
+    dpi      = 300
+  )
+}
+
+#   we can find files in ls plots/ 
+#   gaussian_FDR.png, gaussian_power.png,
+#   logistic_ar1_FDR.png, logistic_ar1_power.png,
+#   logistic_large_FDR.png, logistic_large_power.png
+
+
+
+
+#These warnings may look concerning, but they do NOT affect the correctness of the knockoff construction. This is because the package implements an automatic fallback strategy: 
+#1. Attempt to compute eigenvalues using RSpectra::eigs(). 
+#2. If eigs() fails to converge, the function automatically falls back to base::eigen(), which is slower but numerically stable.
+```
