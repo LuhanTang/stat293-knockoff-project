@@ -19,7 +19,7 @@ Annals of Statistics.
 
 ---
 
-# 📊 Models Studied
+## 📊 Models Studied
 
 **1. Gaussian Linear Model**
 
@@ -28,7 +28,7 @@ Annals of Statistics.
  **3. Independent Logistic Regression (Large p)**
 
 
- **Baseline Method: Benjamini–Hochberg (BH)
+ **Baseline Method: Benjamini–Hochberg (BH)**
 
 ---
 
