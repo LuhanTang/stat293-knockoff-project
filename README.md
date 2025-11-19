@@ -21,31 +21,14 @@ Annals of Statistics.
 
 # 📊 Models Studied
 
-## **1. Gaussian Linear Model**
+**1. Gaussian Linear Model**
 
-- Response:  
-  $$ y = X\beta + \varepsilon $$
-- Covariates: AR(1) correlation  
-  $$ \Sigma_{ij} = \rho^{|i-j|}, \; \rho = 0.3 $$
-- Signal strength: moderate (s ≈ 40)
+ **2. Logistic Regression with AR(1) Correlation**
 
----
+ **3. Independent Logistic Regression (Large p)**
 
-## **2. Logistic Regression with AR(1) Correlation**
 
-- Model:  
-  $$ Y_i \sim \text{Bernoulli}(\text{logit}^{-1}(X_i^\top \beta)) $$
-- Covariates follow AR(1) Gaussian design  
-- Strong feature correlations make this setting more challenging
-
----
-
-## **3. Independent Logistic Regression (Large p)**
-
-- Features i.i.d. Gaussian  
-  $$ X_{ij} \sim N(0,1) $$
-- Weak signals (s = 60) → extremely low SNR  
-- Represents a difficult high-dimensional nonlinear regime
+ **Baseline Method: Benjamini–Hochberg (BH)
 
 ---
 
