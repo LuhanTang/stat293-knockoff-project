@@ -1,0 +1,429 @@
+---
+title: "STAT 293 Final Project: Model-X Knockoffs vs. Benjamini–Hochberg"
+author: "Luhan Tang and Shengming Chen"
+date: "2025-11-20"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo   = TRUE,
+  message= FALSE,
+  warning= FALSE
+)
+```
+
+# 1 Introduction
+
+This R Markdown file is the main analysis file for our STAT 293 final
+project. It uses the function files
+
+• 00_requirements.R
+
+• 01_DataSimulation.R
+
+• 12_Knockoff_aux.R
+
+• 11_Knockoff.R
+
+• 21_BH.R
+
+to run simulations, summarize the results, and generate the plots
+included in the final report.
+
+We compare Model-X Knockoff+ with the classical Benjamini–Hochberg (BH)
+procedure in terms of:
+
+• empirical False Discovery Rate (FDR), and
+
+• empirical True Positive Rate (TPR, power),
+
+under three high-dimensional models.
+
+# 2 Methods
+
+## 2.1 Benjamini–Hochberg (BH)
+
+Given marginal $p$-values $p_1,\dots,p_p$, the BH procedure sorts them
+
+$$
+p_{(1)} \le p_{(2)} \le \cdots \le p_{(p)},
+$$
+
+and finds the largest index (k) such that
+
+$$
+p_{(k)} \le \frac{k}{p} q,
+$$
+
+where (q) is the target FDR level. All variables with $p_i \le p\_{(k)}$
+are selected. BH is simple and widely used, but it ignores correlation
+between predictors and does not explicitly exploit the joint
+distribution of $(X,Y)$.
+
+## 2.2 Model-X Knockoff+
+
+Model-X Knockoffs construct synthetic “knockoff” variables $\tilde X$
+that satisfy a pairwise exchangeability property with the original
+features $X$:
+
+$$
+(X, \tilde X)_{\text{swap}(j)} \stackrel{d}{=} (X, \tilde X)
+\quad\text{for all } j,
+$$
+
+where $(X,\tilde X)\_{\text{swap}(j)}$ denotes the vector obtained by
+swapping $X_j$ with its knockoff $(\tilde X_j$. This ensures that any
+systematic difference between $X_j$ and $\tilde X_j$ must come from the
+signal rather than from random noise.
+
+We compute a Lasso-based statistic for each feature. Let
+
+• $Z_j = |\hat\beta_j|$ be the absolute coefficient of the original
+feature,
+
+• $Z_j^{\text{knock}} = |\hat\beta_{j+p}|$ be that of the knockoff.
+
+Define the Knockoff statistic
+
+$$
+W_j = \max(Z_j, Z_j^{\text{knock}})\cdot \text{sign}(Z_j - Z_j^{\text{knock}}).
+$$
+
+Knockoff+ uses the data–adaptive threshold
+
+$$
+T = \min\left\{
+  t > 0 :
+  \frac{1 + \#\{j : W_j \le -t\}}
+       {\#\{j : W_j \ge t\}} \le q
+\right\}.
+$$
+
+and selects
+
+$$
+\widehat S = { j : W_j \ge T }.
+$$
+
+Because each feature competes directly with its knockoff, Knockoff+ can
+control FDR even under strong correlations and nonlinear models.
+
+# 3 Models
+
+We consider three synthetic data-generating models.
+
+## 3.1 Gaussian linear model
+
+The response follows
+
+$$
+y = X\beta + \varepsilon, \qquad \varepsilon \sim N(0, \sigma^2 I_n).
+$$
+
+• The design matrix $X$ has an AR(1) covariance structure
+$\Sigma\_{ij} = \rho^{\|i-j\|}$ with $\rho = 0.3$.
+
+• The number of nonzero coefficients is (s = 40).
+
+• Active coefficients have size $\beta_j = 1.5$.
+
+• The noise variance is scaled so that the signal-to-noise ratio is
+
+approximately $\text{SNR} \approx 8$.
+
+This is a relatively favorable setting for Knockoff+, since the Gaussian
+assumptions are close to the theory.
+
+## 3.2 Logistic regression with AR(1) design
+
+Here the binary response satisfies
+
+$$
+Y_i \sim \text{Bernoulli}(\pi_i), \qquad
+\pi_i = \text{logit}^{-1}(X_i^\top \beta).
+$$ • The rows of (X) follow the same AR(1) covariance as in the Gaussian
+model.
+
+• We again take (s = 40) active coefficients with $\beta_j = 1.5$.
+
+The nonlinear logit link makes the problem more challenging, especially
+for Lasso-based statistics, and we expect both FDR control and power to
+be harder.
+
+## 3.3 Independent logistic regression (large (p))
+
+In the third model, the features are independent:
+
+• $X_{ij} \sim N(0,1)$ i.i.d.,
+
+• the number of signals is increased to (s = 60),
+
+• active coefficients still have size $\beta_j = 1.5$.
+
+This corresponds to a weak-signal, high-dimensional logistic setting
+with low effective SNR, where we expect both methods to have limited
+power.
+
+# 4 Simulation setup
+
+For each model, we compare BH and Knockoff+ at target FDR levels
+
+$$
+q \in {0.05, 0.10, 0.20}.
+$$
+
+We run (R = 10) repetitions for every combination of model and (q).
+
+For each repetition we record:
+
+• the number of true positives (TP),
+
+• the number of false positives (FP),
+
+• the total number of selected variables (Sel).
+
+From these we compute
+
+• empirical FDR:
+
+$$
+\text{FDR} = \frac{\text{FP}}{\max(\text{Sel},1)},
+$$ • empirical TPR (power):
+
+$$
+\text{TPR} = \frac{\text{TP}}{s}.
+$$
+
+The following chunks load the function files and define the simulation
+helpers.
+
+```{r}
+source("00_requirements.R")
+source("01_DataSimulation.R")
+source("12_Knockoff_aux.R")
+source("11_Knockoff.R")
+source("21_BH.R")
+
+# Check that the key functions exist
+ls(pattern = "gen_")
+ls(pattern = "run_")
+```
+
+```{r}
+# One simulation run for a chosen model and FDR level q
+one_run_model <- function(model = c("gaussian", "logistic_ar1", "logistic_large"),
+                          q      = 0.10,
+                          seed   = 1){
+
+  model <- match.arg(model)
+
+  if (model == "gaussian") {
+    dat    <- gen_gaussian_linear(seed = seed)
+    family <- "gaussian"
+  } else if (model == "logistic_ar1") {
+    dat    <- gen_logistic_ar1(seed = seed)
+    family <- "binomial"
+  } else {
+    dat    <- gen_logistic_large(seed = seed)
+    family <- "binomial"
+  }
+
+  X    <- scale(dat$X)
+  y    <- dat$y
+  supp <- dat$supp
+
+  ## Knockoff+
+  sel_k <- run_knockoff(X, y, q = q, family = family)
+  tp_k  <- sum(sel_k %in% supp)
+  fp_k  <- length(sel_k) - tp_k
+  fdr_k <- ifelse(length(sel_k) == 0, 0, fp_k / length(sel_k))
+  tpr_k <- tp_k / length(supp)
+
+  ## BH
+  sel_bh <- run_bh(X, y, q = q, family = family)
+  tp_bh  <- sum(sel_bh %in% supp)
+  fp_bh  <- length(sel_bh) - tp_bh
+  fdr_bh <- ifelse(length(sel_bh) == 0, 0, fp_bh / length(sel_bh))
+  tpr_bh <- tp_bh / length(supp)
+
+  data.frame(
+    model    = model,
+    method   = c("Knockoff+", "BH"),
+    q        = q,
+    FDR      = c(fdr_k,  fdr_bh),
+    TPR      = c(tpr_k,  tpr_bh),
+    selected = c(length(sel_k), length(sel_bh))
+  )
+}
+
+# Repeat simulations for all models and q values
+run_reps_all <- function(R  = 10,
+                         qs = c(0.05, 0.10, 0.20)){
+  models <- c("gaussian", "logistic_ar1", "logistic_large")
+
+  all_res <- lapply(seq_len(R), function(r){
+    do.call(rbind, lapply(models, function(m){
+      do.call(rbind, lapply(qs, function(q){
+        one_run_model(model = m,
+                      q     = q,
+                      seed  = 1000 * r + 100 * q)
+      }))
+    }))
+  })
+
+  do.call(rbind, all_res)
+}
+```
+
+# 5 Simulation results
+
+## 5.1 Raw results
+
+```{r}
+res_all <- run_reps_all(R = 10, qs = c(0.05, 0.10, 0.20))
+
+dplyr::glimpse(res_all)
+```
+
+## 5.2 Summary table
+
+```{r}
+library(dplyr)
+
+summ_all <- res_all %>%
+  group_by(model, method, q) %>%
+  summarise(
+    mean_FDR = mean(FDR),
+    mean_TPR = mean(TPR),
+    mean_sel = mean(selected),
+    .groups  = "drop"
+  )
+
+summ_all
+
+knitr::kable(
+  summ_all,
+  digits = 3,
+  caption = "Empirical FDR, TPR, and average number of selected variables for Knockoff+ and BH across the three models."
+)
+```
+
+The table reports, for each combination of model, method, and target FDR
+level (q):
+
+• the average empirical FDR,
+
+• the average empirical TPR (power),
+
+• and the average number of selected variables.
+
+# 6 Visualisation
+
+## 6.1 FDR vs target (q)
+
+```{r}
+library(ggplot2)
+
+# FDR vs q, faceted by model
+p_fdr <- ggplot(summ_all,
+                aes(x = factor(q),
+                    y = mean_FDR,
+                    group = method,
+                    color = method)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  facet_wrap(~ model, nrow = 1) +
+  labs(
+    title = "Empirical FDR vs Target q",
+    x     = "Target FDR level q",
+    y     = "Empirical FDR"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+p_fdr
+```
+
+## 6.2 Power (TPR) vs target (q)
+
+```{r}
+p_power <- ggplot(summ_all,
+                  aes(x = factor(q),
+                      y = mean_TPR,
+                      group = method,
+                      color = method)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  facet_wrap(~ model, nrow = 1) +
+  labs(
+    title = "Power (TPR) vs Target q",
+    x     = "Target FDR level q",
+    y     = "Power (TPR)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+p_power
+```
+
+## 6.3 Save plots to file
+
+```{r}
+out_dir <- "plots"
+if (!dir.exists(out_dir)) dir.create(out_dir)
+
+ggsave(file.path(out_dir, "FDR_all_models.png"),
+       p_fdr,   width = 7, height = 4, dpi = 300)
+
+ggsave(file.path(out_dir, "Power_all_models.png"),
+       p_power, width = 7, height = 4, dpi = 300)
+```
+
+The images FDR_all_models.png and Power_all_models.png can be directly
+inserted into the final written report.
+
+# 7 Discussion and conclusion
+
+Overall, the simulations show the following patterns:
+
+• Gaussian linear model
+
+Knockoff+ keeps the empirical FDR close to or below the target (q),
+while achieving substantially higher power than BH, especially at (q =
+0.10) and (q = 0.20). This agrees with theory: when the design is
+approximately Gaussian with known covariance, Model-X Knockoffs are
+close to optimal.
+
+• Logistic regression with AR(1)
+
+Both methods become less powerful in this nonlinear setting. Knockoff+
+is quite conservative at small (q) (sometimes making no discoveries),
+but as (q) increases, its power catches up and can slightly exceed BH,
+while still keeping FDR under control.
+
+• Independent logistic regression (large)
+
+This is a weak-signal regime with low SNR. Both procedures have low TPR.
+Knockoff+ remains conservative, but avoids severe FDR inflation. BH may
+select more variables, but at the cost of higher FDR, especially when (q
+= 0.20).
+
+In summary, Knockoff+ offers more stable FDR control and better power
+than BH in the favorable Gaussian setting, and remains competitive in
+harder logistic models. The results support the use of Model-X Knockoffs
+as a robust alternative to classical BH in high-dimensional variable
+selection problems.
