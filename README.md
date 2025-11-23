@@ -32,4 +32,4 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 
 ---
 
-✨ Authors: Luhan Tang & Shengming Chen
+✨ Authors: Luhan Tang & Shengming Cheng
