@@ -1,13 +1,13 @@
-#############################################
+# ===========================
 # 00_requirements.R
-# Load and install required packages
-#############################################
+# ===========================
+packages <- c(
+  "MASS", "glmnet", "knockoff", "dplyr", "tibble",
+  "purrr", "ggplot2", "stringr"
+)
 
-packs <- c("MASS", "glmnet", "knockoff", "ggplot2", "dplyr", "corpcor")
+lapply(packages, library, character.only = TRUE)
 
-new <- setdiff(packs, rownames(installed.packages()))
-if(length(new)) install.packages(new)
-
-invisible(lapply(packs, library, character.only = TRUE))
-
-set.seed(100)
+# Global settings
+set.seed(123)
+options(stringsAsFactors = FALSE)

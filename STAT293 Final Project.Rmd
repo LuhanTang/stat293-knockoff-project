@@ -33,7 +33,7 @@ ar1_cov <- function(p, rho){
 ### 3. Data generators for the three models
 ############################################################
 
-## 3.1 Gaussian linear model
+## 3.1.1 Gaussian AR(1), high-dimensional
 gen_gaussian_linear <- function(n = 250,
                                 p = 400,
                                 s = 40,
@@ -44,6 +44,7 @@ gen_gaussian_linear <- function(n = 250,
   
   Sigma <- ar1_cov(p, rho)
   X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  X <- scale(X)
   
   beta <- rep(0, p)
   supp <- sample(1:p, s)
@@ -53,6 +54,32 @@ gen_gaussian_linear <- function(n = 250,
   sigma_eps <- sqrt(var(signal) / snr)
   y <- signal + rnorm(n, 0, sigma_eps)
   
+  list(X = X, y = y, beta = beta, supp = supp)
+}
+
+
+
+## 3.1.2 Gaussian LOW-dimensional version
+gen_gaussian_lowdim <- function(n = 400,
+                                p = 250,
+                                s = 40,
+                                snr = 8,
+                                rho = 0.3,
+                                seed = NULL){
+  if(!is.null(seed)) set.seed(seed)
+
+  Sigma <- ar1_cov(p, rho)
+  X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  X <- scale(X)
+
+  beta <- rep(0, p)
+  supp <- sample(1:p, s)
+  beta[supp] <- 1.5
+
+  signal <- as.vector(X %*% beta)
+  sigma_eps <- sqrt(var(signal) / snr)
+  y <- signal + rnorm(n, 0, sigma_eps)
+
   list(X = X, y = y, beta = beta, supp = supp)
 }
 
@@ -67,6 +94,7 @@ gen_logistic_ar1 <- function(n = 250,
   
   Sigma <- ar1_cov(p, rho)
   X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  X <- scale(X)
   
   beta <- rep(0,p)
   supp <- sample(1:p, s)
@@ -79,8 +107,8 @@ gen_logistic_ar1 <- function(n = 250,
   list(X = X, y = y, beta = beta, supp = supp)
 }
 
-## 3.3 Logistic regression, large n/p
-gen_logistic_large <- function(n = 250,
+## 3.3 Independent logistic (large p)
+gen_logistic_indep <- function(n = 250,
                                p = 400,
                                s = 60,
                                beta_size = 1.5,
@@ -88,7 +116,8 @@ gen_logistic_large <- function(n = 250,
   if(!is.null(seed)) set.seed(seed)
   
   X <- matrix(rnorm(n*p), n, p)
-  
+  X <- scale(X)
+
   beta <- rep(0,p)
   supp <- sample(1:p, s)
   beta[supp] <- beta_size
@@ -99,7 +128,6 @@ gen_logistic_large <- function(n = 250,
   
   list(X = X, y = y, beta = beta, supp = supp)
 }
-
 ############################################################
 ### 4. Lasso-based statistic for Knockoffs
 ###    
@@ -115,7 +143,7 @@ lasso_stat_generic <- function(X, Xk, y, family = c("gaussian","binomial")){
   rss  <- colSums((y - yhat)^2)
   idx_min <- which.min(rss)
   
-# Take the corresponding column directly from the original beta matrix of fit (excluding the intercept).
+  # Take the corresponding column directly from the original beta matrix of fit (excluding the intercept).
   coefs <- as.numeric(fit$beta[, idx_min])
   
   p <- ncol(X)
@@ -165,18 +193,21 @@ run_bh <- function(X, y, q=0.10, family=c("gaussian","binomial")){
 ############################################################
 ### 7. Single simulation for a chosen model
 ############################################################
-one_run_model <- function(model=c("gaussian","logistic_ar1","logistic_large"),
+one_run_model <- function(model=c("gaussian","gaussian_lowdim","logistic_ar1","logistic_indep"),
                           q=0.10, seed=1){
   model <- match.arg(model)
   
   if(model=="gaussian"){
     dat <- gen_gaussian_linear(seed = seed)
     family <- "gaussian"
+  } else if(model=="gaussian_lowdim"){
+    dat <- gen_gaussian_lowdim(seed = seed)
+    family <- "gaussian"
   } else if(model=="logistic_ar1"){
     dat <- gen_logistic_ar1(seed = seed)
     family <- "binomial"
   } else {
-    dat <- gen_logistic_large(seed = seed)
+    dat <- gen_logistic_indep(seed = seed)
     family <- "binomial"
   }
   
@@ -184,14 +215,12 @@ one_run_model <- function(model=c("gaussian","logistic_ar1","logistic_large"),
   y <- dat$y
   supp <- dat$supp
   
-  ## Knockoff+
   sel_k <- run_knockoff(X, y, q = q, family = family)
   tp_k  <- sum(sel_k %in% supp)
   fp_k  <- length(sel_k) - tp_k
   fdr_k <- ifelse(length(sel_k)==0, 0, fp_k/length(sel_k))
   tpr_k <- tp_k / length(supp)
   
-  ## BH
   sel_bh <- run_bh(X, y, q = q, family = family)
   tp_bh  <- sum(sel_bh %in% supp)
   fp_bh  <- length(sel_bh) - tp_bh
@@ -209,10 +238,10 @@ one_run_model <- function(model=c("gaussian","logistic_ar1","logistic_large"),
 }
 
 ############################################################
-### 8. Repeat for all models
+### 8. Repeat all models
 ############################################################
 run_reps_all <- function(R=10, qs=c(0.05,0.10,0.20)){
-  models <- c("gaussian","logistic_ar1","logistic_large")
+  models <- c("gaussian","gaussian_lowdim","logistic_ar1","logistic_indep")
   
   all_res <- lapply(1:R, function(r){
     do.call(rbind, lapply(models, function(m){
@@ -322,4 +351,65 @@ for(m in models){
 #These warnings may look concerning, but they do NOT affect the correctness of the knockoff construction. This is because the package implements an automatic fallback strategy: 
 #1. Attempt to compute eigenvalues using RSpectra::eigs(). 
 #2. If eigs() fails to converge, the function automatically falls back to base::eigen(), which is slower but numerically stable.
+
+############################################################
+### 12. Boxplots of FDR and TPR across repetitions
+###     (NEW: for variability / stability visualization)
+############################################################
+
+# FDR boxplots: x = q, separate boxes for methods, one figure per model
+for(m in models){
+  df_m_full <- dplyr::filter(res_all, model == m)
+  
+  p_box_fdr <- ggplot(
+      df_m_full,
+      aes(x = factor(q), y = FDR, fill = method)
+    ) +
+    geom_boxplot(position = position_dodge(width = 0.7),
+                 outlier.size = 0.8) +
+    labs(
+      title = paste0("FDR distribution across repetitions (", m, " model)"),
+      x     = "Target FDR level q",
+      y     = "Empirical FDR"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+  
+  ggsave(
+    filename = file.path(out_dir, paste0(m, "_FDR_box.png")),
+    plot     = p_box_fdr,
+    width    = 6,
+    height   = 4,
+    dpi      = 300
+  )
+  
+  # TPR / Power boxplots
+  p_box_tpr <- ggplot(
+      df_m_full,
+      aes(x = factor(q), y = TPR, fill = method)
+    ) +
+    geom_boxplot(position = position_dodge(width = 0.7),
+                 outlier.size = 0.8) +
+    labs(
+      title = paste0("TPR distribution across repetitions (", m, " model)"),
+      x     = "Target FDR level q",
+      y     = "Power (TPR)"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+  
+  ggsave(
+    filename = file.path(out_dir, paste0(m, "_TPR_box.png")),
+    plot     = p_box_tpr,
+    width    = 6,
+    height   = 4,
+    dpi      = 300
+  )
+}
 ```

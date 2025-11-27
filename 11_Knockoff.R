@@ -1,21 +1,28 @@
-#############################################
+# ===========================
 # 11_Knockoff.R
-# Knockoff+ selection procedure
-#############################################
+# ===========================
 
-run_knockoff <- function(X, y, q=0.10, family=c("gaussian","binomial")){
-  family <- match.arg(family)
+run_knockoff_plus <- function(X, y, q = 0.1, model = "gaussian") {
   
-  # Shrinkage covariance ensures PD
-  Sigma1 <- cov.shrink(X)
-  Sigma  <- as.matrix(Sigma1)
-  class(Sigma) <- NULL
+  knock_X <- knockoff::create.fixed(X)
   
-  kobj <- knockoff::create.gaussian(X, mu = rep(0, ncol(X)), Sigma = Sigma)
-  Xk <- if(is.list(kobj) && !is.null(kobj$Xk)) kobj$Xk else kobj
+  if (model == "gaussian") {
+    fit <- glmnet::glmnet(cbind(X, knock_X), y, family = "gaussian")
+  } else {
+    fit <- glmnet::glmnet(cbind(X, knock_X), y, family = "binomial")
+  }
   
-  W <- lasso_stat_generic(X, Xk, y, family = family)
-  T <- knockoff.threshold(W, fdr = q, offset = 1)
+  beta_hat <- coef(fit, s = fit$lambda.min)[-1]
   
-  which(W >= T)
+  p <- ncol(X)
+  Z <- abs(beta_hat[1:p])
+  Zk <- abs(beta_hat[(p+1):(2*p)])
+  
+  W <- pmax(Z, Zk) * sign(Z - Zk)
+  
+  T <- knockoff::knockoff.threshold(W, q = q, offset = 1)
+  
+  selected <- which(W >= T)
+  
+  list(selected = selected, W = W)
 }

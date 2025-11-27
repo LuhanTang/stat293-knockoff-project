@@ -1,65 +1,67 @@
-#############################################
+# ===========================
 # 01_DataSimulation.R
-# Data simulation functions
-#############################################
+# ===========================
 
-# AR(1) covariance helper
-ar1_cov <- function(p, rho){
+# Helper: AR(1) covariance
+ar1_cov <- function(p, rho) {
   idx <- 1:p
-  rho^abs(outer(idx, idx, "-"))
+  rho ^ abs(outer(idx, idx, "-"))
 }
 
-# 1) Gaussian linear model
-gen_gaussian_linear <- function(n = 250, p = 400, s = 40,
-                                snr = 8, rho = 0.3, seed = NULL){
-  if(!is.null(seed)) set.seed(seed)
-  
+# 1. Gaussian linear (p=400)
+gen_gaussian <- function(n = 250, p = 400, s = 40, beta_size = 1.5, rho = 0.3) {
   Sigma <- ar1_cov(p, rho)
-  X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  X <- MASS::mvrnorm(n, rep(0, p), Sigma)
   
-  beta <- rep(0, p)
+  beta <- numeric(p)
   supp <- sample(1:p, s)
-  beta[supp] <- 1.5
+  beta[supp] <- beta_size
   
-  signal <- as.vector(X %*% beta)
-  sigma_eps <- sqrt(var(signal) / snr)
-  y <- signal + rnorm(n, 0, sigma_eps)
+  y <- X %*% beta + rnorm(n)
   
   list(X = X, y = y, beta = beta, supp = supp)
 }
 
-# 2) Logistic regression with AR(1)
-gen_logistic_ar1 <- function(n = 250, p = 400, s = 40,
-                             rho = 0.3, beta_size = 1.5, seed = NULL){
-  if(!is.null(seed)) set.seed(seed)
-  
+# 2. Gaussian linear (low-dim p=1000)
+gen_gaussian_lowdim <- function(n = 600, p = 1000, s = 60, beta_size = 1.5, rho = 0.3) {
   Sigma <- ar1_cov(p, rho)
-  X <- MASS::mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+  X <- MASS::mvrnorm(n, rep(0, p), Sigma)
   
-  beta <- rep(0,p)
+  beta <- numeric(p)
   supp <- sample(1:p, s)
   beta[supp] <- beta_size
   
-  eta <- as.vector(X %*% beta)
-  prob <- 1/(1 + exp(-eta))
+  y <- X %*% beta + rnorm(n)
+  
+  list(X = X, y = y, beta = beta, supp = supp)
+}
+
+# 3. Logistic AR(1)
+gen_logistic_ar1 <- function(n = 250, p = 400, s = 40, beta_size = 1.5, rho = 0.3) {
+  Sigma <- ar1_cov(p, rho)
+  X <- MASS::mvrnorm(n, rep(0, p), Sigma)
+  
+  beta <- numeric(p)
+  supp <- sample(1:p, s)
+  beta[supp] <- beta_size
+  
+  eta <- X %*% beta
+  prob <- 1 / (1 + exp(-eta))
   y <- rbinom(n, 1, prob)
   
   list(X = X, y = y, beta = beta, supp = supp)
 }
 
-# 3) Independent logistic regression (large p)
-gen_logistic_large <- function(n = 250, p = 400, s = 60,
-                               beta_size = 1.5, seed = NULL){
-  if(!is.null(seed)) set.seed(seed)
+# 4. Logistic independent
+gen_logistic_indep <- function(n = 250, p = 400, s = 60, beta_size = 1.5) {
+  X <- matrix(rnorm(n * p), n, p)
   
-  X <- matrix(rnorm(n*p), n, p)
-  
-  beta <- rep(0,p)
+  beta <- numeric(p)
   supp <- sample(1:p, s)
   beta[supp] <- beta_size
   
-  eta <- as.vector(X %*% beta)
-  prob <- 1/(1 + exp(-eta))
+  eta <- X %*% beta
+  prob <- 1 / (1 + exp(-eta))
   y <- rbinom(n, 1, prob)
   
   list(X = X, y = y, beta = beta, supp = supp)

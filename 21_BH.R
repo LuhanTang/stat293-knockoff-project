@@ -1,18 +1,23 @@
-#############################################
+# ===========================
 # 21_BH.R
-# Benjamini–Hochberg baseline
-#############################################
+# ===========================
 
-run_bh <- function(X, y, q=0.10, family=c("gaussian","binomial")){
-  family <- match.arg(family)
+run_BH <- function(X, y, q = 0.1, model = "gaussian") {
   
-  pvals <- apply(X, 2, function(x){
-    if(family=="gaussian") {
-      summary(lm(y ~ x))$coef[2,4]
+  p <- ncol(X)
+  pvals <- numeric(p)
+  
+  for (j in 1:p) {
+    if (model == "gaussian") {
+      fit <- summary(lm(y ~ X[, j]))
+      pvals[j] <- fit$coefficients[2, 4]
     } else {
-      summary(glm(y ~ x, family = binomial))$coef[2,4]
+      fit <- summary(glm(y ~ X[, j], family = "binomial"))
+      pvals[j] <- fit$coefficients[2, 4]
     }
-  })
+  }
   
-  which(p.adjust(pvals, method = "BH") <= q)
+  selected <- which(p.adjust(pvals, method = "BH") <= q)
+  
+  list(selected = selected, pvals = pvals)
 }

@@ -29,8 +29,6 @@ project. It uses the function files
 
 • 01_DataSimulation.R
 
-• 12_Knockoff_aux.R
-
 • 11_Knockoff.R
 
 • 21_BH.R
@@ -45,7 +43,7 @@ procedure in terms of:
 
 • empirical True Positive Rate (TPR, power),
 
-under three high-dimensional models.
+under 4 high-dimensional models.
 
 # 2 Methods
 
@@ -118,55 +116,49 @@ control FDR even under strong correlations and nonlinear models.
 
 # 3 Models
 
-We consider three synthetic data-generating models.
+We consider four synthetic data-generating models.
 
-## 3.1 Gaussian linear model
+## 3.1 Gaussian linear model (high-dimensional)
 
-The response follows
+The response follows $$
+y = X\beta + \varepsilon, \qquad
+\varepsilon \sim N(0, \sigma^2 I_n),
+$$ with - $n = 250$, $p = 400$; - the design matrix $X$ having an AR(1)
+covariance structure $\Sigma_{ij} = \rho^{|i-j|}$ with $\rho = 0.3$; -
+$s = 40$ nonzero coefficients of size $\beta_j = 1.5$; - noise scaled so
+that the signal-to-noise ratio is approximately
+$\mathrm{SNR} \approx 8$.
 
-$$
-y = X\beta + \varepsilon, \qquad \varepsilon \sim N(0, \sigma^2 I_n).
-$$
+This is a relatively favourable setting for Knockoff+, since the
+Gaussian assumptions closely match the theory.
 
-• The design matrix $X$ has an AR(1) covariance structure
-$\Sigma\_{ij} = \rho^{\|i-j\|}$ with $\rho = 0.3$.
+## 3.2 Gaussian linear model (low-dimensional)
 
-• The number of nonzero coefficients is (s = 40).
+The second Gaussian model has a larger sample size and smaller
+dimension: - $n = 400$, $p = 250$; - the same AR(1) covariance, sparsity
+level $s = 40$, and signal size $\beta_j = 1.5$.
 
-• Active coefficients have size $\beta_j = 1.5$.
+Here $n > p$, and we expect both procedures to be more powerful, with
+Knockoff+ potentially benefiting more from the stronger effective SNR.
 
-• The noise variance is scaled so that the signal-to-noise ratio is
+## 3.3 Logistic regression with AR(1) design
 
-approximately $\text{SNR} \approx 8$.
+The binary response satisfies $$
+Y_i \sim \mathrm{Bernoulli}(\pi_i), \qquad
+\pi_i = \mathrm{logit}^{-1}(X_i^\top \beta),
+$$ where - $n = 250$, $p = 400$; - the rows of $X$ follow the same AR(1)
+covariance as in the Gaussian models; - $s = 40$ active coefficients
+with $\beta_j = 1.5$.
 
-This is a relatively favorable setting for Knockoff+, since the Gaussian
-assumptions are close to the theory.
+The nonlinear logit link and correlated design make variable selection
+more challenging, especially for Lasso-based statistics.
 
-## 3.2 Logistic regression with AR(1) design
+## 3.4 Independent logistic regression
 
-Here the binary response satisfies
-
-$$
-Y_i \sim \text{Bernoulli}(\pi_i), \qquad
-\pi_i = \text{logit}^{-1}(X_i^\top \beta).
-$$ • The rows of (X) follow the same AR(1) covariance as in the Gaussian
-model.
-
-• We again take (s = 40) active coefficients with $\beta_j = 1.5$.
-
-The nonlinear logit link makes the problem more challenging, especially
-for Lasso-based statistics, and we expect both FDR control and power to
-be harder.
-
-## 3.3 Independent logistic regression (large (p))
-
-In the third model, the features are independent:
-
-• $X_{ij} \sim N(0,1)$ i.i.d.,
-
-• the number of signals is increased to (s = 60),
-
-• active coefficients still have size $\beta_j = 1.5$.
+The fourth model is also logistic but with independent covariates: -
+$n = 250$, $p = 400$; - $X_{ij} \sim N(0,1)$ i.i.d., followed by
+standardisation; - the number of signals is increased to $s = 60$ with
+$\beta_j = 1.5$.
 
 This corresponds to a weak-signal, high-dimensional logistic setting
 with low effective SNR, where we expect both methods to have limited
@@ -208,18 +200,16 @@ helpers.
 ```{r}
 source("00_requirements.R")
 source("01_DataSimulation.R")
-source("12_Knockoff_aux.R")
 source("11_Knockoff.R")
 source("21_BH.R")
-
-# Check that the key functions exist
-ls(pattern = "gen_")
-ls(pattern = "run_")
 ```
 
 ```{r}
 # One simulation run for a chosen model and FDR level q
-one_run_model <- function(model = c("gaussian", "logistic_ar1", "logistic_large"),
+one_run_model <- function(model = c("gaussian",
+                                    "gaussian_lowdim",
+                                    "logistic_ar1",
+                                    "logistic_indep"),
                           q      = 0.10,
                           seed   = 1){
 
@@ -228,11 +218,14 @@ one_run_model <- function(model = c("gaussian", "logistic_ar1", "logistic_large"
   if (model == "gaussian") {
     dat    <- gen_gaussian_linear(seed = seed)
     family <- "gaussian"
+  } else if (model == "gaussian_lowdim") {
+    dat    <- gen_gaussian_lowdim(seed = seed)
+    family <- "gaussian"
   } else if (model == "logistic_ar1") {
     dat    <- gen_logistic_ar1(seed = seed)
     family <- "binomial"
-  } else {
-    dat    <- gen_logistic_large(seed = seed)
+  } else {  # logistic_indep
+    dat    <- gen_logistic_indep(seed = seed)
     family <- "binomial"
   }
 
@@ -267,14 +260,19 @@ one_run_model <- function(model = c("gaussian", "logistic_ar1", "logistic_large"
 # Repeat simulations for all models and q values
 run_reps_all <- function(R  = 10,
                          qs = c(0.05, 0.10, 0.20)){
-  models <- c("gaussian", "logistic_ar1", "logistic_large")
+  models <- c("gaussian",
+              "gaussian_lowdim",
+              "logistic_ar1",
+              "logistic_indep")
 
   all_res <- lapply(seq_len(R), function(r){
     do.call(rbind, lapply(models, function(m){
       do.call(rbind, lapply(qs, function(q){
-        one_run_model(model = m,
-                      q     = q,
-                      seed  = 1000 * r + 100 * q)
+        one_run_model(
+          model = m,
+          q     = q,
+          seed  = 1000 * r + 100 * q
+        )
       }))
     }))
   })
@@ -398,32 +396,32 @@ inserted into the final written report.
 
 # 7 Discussion and conclusion
 
-Overall, the simulations show the following patterns:
+Overall, the simulations show the following patterns.
 
-• Gaussian linear model
+-   **Gaussian linear models (high- and low-dimensional).**\
+    In both Gaussian settings, Knockoff+ keeps empirical FDR close to or
+    below the target $q$, while achieving substantially higher power
+    than BH. The advantage is especially pronounced in the
+    low-dimensional model, where $n > p$ and the effective SNR is
+    higher: Knockoff+ is able to recover almost all signals while still
+    controlling FDR.
 
-Knockoff+ keeps the empirical FDR close to or below the target (q),
-while achieving substantially higher power than BH, especially at (q =
-0.10) and (q = 0.20). This agrees with theory: when the design is
-approximately Gaussian with known covariance, Model-X Knockoffs are
-close to optimal.
+-   **Logistic regression with AR(1).**\
+    In this nonlinear, correlated design, both methods suffer a drop in
+    power compared with the Gaussian case. Knockoff+ is quite
+    conservative at small $q$ (sometimes making no discoveries), but as
+    $q$ increases its power catches up and can slightly exceed BH, while
+    its FDR remains more stable.
 
-• Logistic regression with AR(1)
+-   **Independent logistic regression.**\
+    This weak-signal regime is difficult for both procedures. TPR
+    remains low across all $q$, and neither method can reliably recover
+    many true signals. Knockoff+ stays conservative and avoids severe
+    FDR inflation, whereas BH tends to select more variables but at the
+    cost of higher FDR, especially at $q = 0.20$.
 
-Both methods become less powerful in this nonlinear setting. Knockoff+
-is quite conservative at small (q) (sometimes making no discoveries),
-but as (q) increases, its power catches up and can slightly exceed BH,
-while still keeping FDR under control.
-
-• Independent logistic regression (large)
-
-This is a weak-signal regime with low SNR. Both procedures have low TPR.
-Knockoff+ remains conservative, but avoids severe FDR inflation. BH may
-select more variables, but at the cost of higher FDR, especially when (q
-= 0.20).
-
-In summary, Knockoff+ offers more stable FDR control and better power
-than BH in the favorable Gaussian setting, and remains competitive in
-harder logistic models. The results support the use of Model-X Knockoffs
-as a robust alternative to classical BH in high-dimensional variable
-selection problems.
+In summary, Knockoff+ offers stable FDR control and superior power in
+well-specified Gaussian designs, and remains competitive in more
+challenging logistic models. These results support Model-X Knockoffs as
+a robust alternative to classical BH for controlled variable selection
+in high-dimensional problems.
