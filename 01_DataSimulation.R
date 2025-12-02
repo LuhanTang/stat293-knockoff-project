@@ -35,34 +35,3 @@ gen_gaussian_lowdim <- function(n = 600, p = 1000, s = 60, beta_size = 1.5, rho 
   
   list(X = X, y = y, beta = beta, supp = supp)
 }
-
-# 3. Logistic AR(1)
-gen_logistic_ar1 <- function(n = 250, p = 400, s = 40, beta_size = 1.5, rho = 0.3) {
-  Sigma <- ar1_cov(p, rho)
-  X <- MASS::mvrnorm(n, rep(0, p), Sigma)
-  
-  beta <- numeric(p)
-  supp <- sample(1:p, s)
-  beta[supp] <- beta_size
-  
-  eta <- X %*% beta
-  prob <- 1 / (1 + exp(-eta))
-  y <- rbinom(n, 1, prob)
-  
-  list(X = X, y = y, beta = beta, supp = supp)
-}
-
-# 4. Logistic independent
-gen_logistic_indep <- function(n = 250, p = 400, s = 60, beta_size = 1.5) {
-  X <- matrix(rnorm(n * p), n, p)
-  
-  beta <- numeric(p)
-  supp <- sample(1:p, s)
-  beta[supp] <- beta_size
-  
-  eta <- X %*% beta
-  prob <- 1 / (1 + exp(-eta))
-  y <- rbinom(n, 1, prob)
-  
-  list(X = X, y = y, beta = beta, supp = supp)
-}
