@@ -36,7 +36,7 @@ source("99_RunSimulation.R")
 ```{r generate-results}
 models <- c("gaussian", "gaussian_lowdim")
 q_grid <- seq(0.05, 0.25, by = 0.05)
-B <- 30   # adjust if needed
+B <- 5   # adjust if needed
 
 results_list <- list()
 
