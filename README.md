@@ -47,9 +47,9 @@ We evaluate Knockoff+ and BH under a **single data-generating model**:
 
 ### **1. Gaussian Linear Model**
 
-- Covariates $( X_i \sim N(0, \Sigma) )$ with Toeplitz structure \( \Sigma_{jk} = \rho^{|j-k|} \)
-- Response model \( Y = X\beta + \varepsilon \)
-- Sparsity level \( s = 40 \)
+- Covariates $ X_i \sim N(0, \Sigma) $ with Toeplitz structure $ \Sigma_{jk} = \rho^{|j-k|} $
+- Response model $ Y = X\beta + \varepsilon $
+- Sparsity level $ s = 40 $
 - Signal strength set so that SNR ≈ 8
 - Dimensions tested: **p = 250** and **p = 400**
 
