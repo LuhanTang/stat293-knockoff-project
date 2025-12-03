@@ -1,6 +1,6 @@
 ---
 title: "STAT 293 Final Project: Model-X Knockoffs vs. Benjamini–Hochberg"
-author: "Luhan Tang and Shengming Chen"
+author: "Luhan Tang and Shengming Cheng"
 date: "2025-11-20"
 output:
   html_document:
