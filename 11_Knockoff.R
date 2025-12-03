@@ -4,7 +4,7 @@
 
 run_knockoff_plus <- function(X, y, q = 0.1, model = "gaussian") {
   
-  knock_X <- knockoff::create.fixed(X)
+  knock_X <- knockoff::create.gaussian(X, mu = rep(0, ncol(X)), Sigma = cov(X))
   
   if (model == "gaussian") {
     fit <- glmnet::glmnet(cbind(X, knock_X), y, family = "gaussian")
