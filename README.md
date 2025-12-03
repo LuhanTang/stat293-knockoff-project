@@ -17,7 +17,7 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 *Journal of the Royal Statistical Society: Series B*.**
 
 ---
-
+```r
 ├── plots/ # Auto-generated simulation figures (FDR, TPR, boxplots, etc.)
 │
 ├── 00_requirements.R # Install/load required packages
@@ -34,7 +34,7 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 ├── STAT293 Final Project.Rmd # Combined notebook used during development (optional)
 │
 └── README.md # Project documentation (this file)
-
+```
 
 
 
@@ -67,22 +67,22 @@ Follow the steps below to fully reproduce our simulation study.
 source("00_requirements.R")
 ```
 
-2️⃣ Generate Gaussian data
+## **2️⃣ Generate Gaussian data**
 This script generates the design matrices, coefficients, and noise according to the model
 
 ```r
 source("11_Knockoff.R")
 ```
 
-3️⃣ Run Knockoff+ procedure
+## **3️⃣ Run Knockoff+ procedure**
 
 Construct Gaussian knockoffs using shrinkage, compute W-statistics, and apply the Knockoff+ threshold:
 
 ```r
-source("11_Knockoff.R")
+source("01_DataSimulation.R")
 ```
 
-4️⃣ Run BH baseline
+## **4️⃣ Run BH baseline**
 
 Compute marginal p-values and apply BH at multiple q-levels:
 
@@ -90,7 +90,7 @@ Compute marginal p-values and apply BH at multiple q-levels:
 source("21_BH.R")
 ```
 
-5️⃣ Run the full simulation pipeline
+## **5️⃣ Run the full simulation pipeline**
 
 This script executes everything end-to-end and saves results into the plots/ folder:
 
@@ -99,7 +99,7 @@ source("99_RunSimulation.R")
 ```
 
 
-6️⃣ Reproduce tables & figures used in the final report
+## **6️⃣ Reproduce tables & figures used in the final report**
 
 Render the analysis RMarkdown file:
 
@@ -107,7 +107,7 @@ Render the analysis RMarkdown file:
 rmarkdown::render("30_MainAnalysis.Rmd")
 ```
 
-📊 Summary of Key Findings
+##📊 Summary of Key Findings
 
 - Knockoff+ consistently controls FDR near the nominal level.
 
