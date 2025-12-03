@@ -23,8 +23,8 @@ simulate_once <- function(model, q) {
   
   # Always use Gaussian family now
   
-method1 <- run_BH(X, y, q, model = "gaussian")
-method2 <- run_knockoff_plus(X, y, q, model = "gaussian")
+method1 <- run_BH(X, y, q, family = "gaussian")
+method2 <- run_knockoff_plus(X, y, q, family = "gaussian")
   
   eval <- function(sel) {
     TP <- sum(sel %in% supp)
