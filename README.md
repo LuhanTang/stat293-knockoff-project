@@ -17,6 +17,7 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 *Journal of the Royal Statistical Society: Series B*.**
 
 ---
+## 📁 Repository Structure
 ```
 ├── plots/ # Auto-generated simulation figures (FDR, TPR, boxplots, etc.)
 │
@@ -131,4 +132,7 @@ rmarkdown::render("30_MainAnalysis.Rmd")
 - Shrinkage-based covariance estimation ensures numerical stability for Gaussian knockoffs.
 
 ---
-Author: Luhan Tang & Shengming Cheng
+## ✏️ Authors
+- **Luhan Tang**
+- **Shengming Cheng**
+
