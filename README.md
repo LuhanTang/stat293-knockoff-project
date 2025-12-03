@@ -17,7 +17,7 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 *Journal of the Royal Statistical Society: Series B*.**
 
 ---
-```r
+```
 ├── plots/ # Auto-generated simulation figures (FDR, TPR, boxplots, etc.)
 │
 ├── 00_requirements.R # Install/load required packages
@@ -45,6 +45,7 @@ This project is based on the Model-X Knockoffs methodology introduced in:
 We evaluate Knockoff+ and BH under a **single data-generating model**:
 
 ### **1. Gaussian Linear Model**
+
 - Covariates \( X_i \sim N(0, \Sigma) \) with Toeplitz structure \( \Sigma_{jk} = \rho^{|j-k|} \)
 - Response model \( Y = X\beta + \varepsilon \)
 - Sparsity level \( s = 40 \)
@@ -64,14 +65,18 @@ Follow the steps below to fully reproduce our simulation study.
 ## **1️⃣ Install required R packages**
 
 ```r
+
 source("00_requirements.R")
+
 ```
 
 ## **2️⃣ Generate Gaussian data**
 This script generates the design matrices, coefficients, and noise according to the model
 
 ```r
-source("11_Knockoff.R")
+
+source("01_DataSimulation.R")
+
 ```
 
 ## **3️⃣ Run Knockoff+ procedure**
@@ -79,7 +84,9 @@ source("11_Knockoff.R")
 Construct Gaussian knockoffs using shrinkage, compute W-statistics, and apply the Knockoff+ threshold:
 
 ```r
-source("01_DataSimulation.R")
+
+source("11_Knockoff.R")
+
 ```
 
 ## **4️⃣ Run BH baseline**
@@ -87,7 +94,9 @@ source("01_DataSimulation.R")
 Compute marginal p-values and apply BH at multiple q-levels:
 
 ```r
+
 source("21_BH.R")
+
 ```
 
 ## **5️⃣ Run the full simulation pipeline**
@@ -95,7 +104,9 @@ source("21_BH.R")
 This script executes everything end-to-end and saves results into the plots/ folder:
 
 ```r
+
 source("99_RunSimulation.R")
+
 ```
 
 
@@ -104,10 +115,12 @@ source("99_RunSimulation.R")
 Render the analysis RMarkdown file:
 
 ```r
+
 rmarkdown::render("30_MainAnalysis.Rmd")
+
 ```
 
-##📊 Summary of Key Findings
+## 📊 Summary of Key Findings
 
 - Knockoff+ consistently controls FDR near the nominal level.
 
