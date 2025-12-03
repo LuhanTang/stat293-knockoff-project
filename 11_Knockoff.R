@@ -20,7 +20,7 @@ run_knockoff_plus <- function(X, y, q = 0.1, model = "gaussian") {
   
   W <- pmax(Z, Zk) * sign(Z - Zk)
   
-  T <- knockoff::knockoff.threshold(W, q = q, offset = 1)
+  T <- knockoff::knockoff.threshold(W, fdr = q, offset = 1)
   
   selected <- which(W >= T)
   
